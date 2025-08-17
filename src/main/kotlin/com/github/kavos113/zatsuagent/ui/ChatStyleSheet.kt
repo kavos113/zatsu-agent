@@ -11,12 +11,25 @@ body {
     margin: 0;
     padding: 0;
     text-align: left;
+    overflow-wrap: anywhere; /* modern wrapping for very long tokens */
+    word-break: break-word;  /* legacy fallback */
+    max-width: 100%;
 }
 p {
     margin: 0;
 }
 h1, h2, h3, h4, h5, h6 {
     margin: 0.25em 0;
+}
+ul, ol, li, blockquote, table, pre, code {
+    max-width: 100%;
+}
+img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+}
+code {
+    white-space: pre-wrap; /* break long inline code tokens */
 }
 """
 

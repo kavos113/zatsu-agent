@@ -38,6 +38,9 @@ class CodeBlock(
         field = EditorTextField(document, project, fileType, true, false).apply {
             addSettingsProvider { editorEx ->
                 editorEx.colorsScheme = EditorColorsManager.getInstance().globalScheme
+                // Enable soft wraps so long lines don't force horizontal scrolling/overflow
+                editorEx.settings.isUseSoftWraps = true
+                editorEx.settings.isAdditionalPageAtBottom = false
 
                 if (diff != null) {
                     text = diff

@@ -34,6 +34,8 @@ class MarkdownPanel(
 
     init {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        // Allow this panel to shrink to the viewport width and not force horizontal scrolling
+        maximumSize = java.awt.Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
 
         val parser = Parser.builder().build()
         val renderer = HtmlRenderer.builder().build()
@@ -72,7 +74,9 @@ class MarkdownPanel(
     }
 
     private fun createEditorPane(content: String): JEditorPane {
-        val editorPane = JEditorPane("text/html", "")
+        val editorPane = object : JEditorPane("text/html", "") {
+            override fun getScrollableTracksViewportWidth(): Boolean = true
+        }
 
         val kit = editorPane.editorKit as HTMLEditorKit
         val styleSheet = kit.styleSheet
@@ -83,6 +87,9 @@ class MarkdownPanel(
         editorPane.background = null
         editorPane.isOpaque = false
         editorPane.font = UIUtil.getLabelFont()
+        // Ensure the HTML view wraps within available width and doesn't force horizontal growth
+        editorPane.putClientProperty("JEditorPane.honorDisplayProperties", true)
+        editorPane.maximumSize = java.awt.Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
 
         return editorPane
     }

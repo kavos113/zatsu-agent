@@ -9,6 +9,9 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTextArea
@@ -18,17 +21,16 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     private val messages: MutableList<Chat> = SAMPLE_MESSAGES
     private val aiService = project.service<AiService>()
 
-    private fun buildMessagesPanel(): JPanel = panel {
-        for (chat in messages) {
-            row {
-                cell(ChatMessage(chat, project).panel)
-                    .align(AlignX.FILL)
-                    .resizableColumn()
-            }
-        }
+    // Keep UI components per message to update incrementally without re-rendering all
+    private val messageUis: MutableList<ChatMessage> = mutableListOf()
+
+    private val listPanel = JPanel().apply {
+        layout = GridBagLayout()
     }
 
-    private val messagesContainer = JPanel(BorderLayout())
+    // Track next insertion row for GridBagLayout and keep a bottom glue to consume extra space
+    private var nextRow: Int = 0
+    private val bottomGlue = JPanel()
 
     private val inputArea = JTextArea(3, 40).apply {
         lineWrap = true
@@ -46,12 +48,13 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     }
 
     init {
-        val initialMessagesPanel = buildMessagesPanel()
-        messagesContainer.add(initialMessagesPanel, BorderLayout.CENTER)
+        // Initialize existing messages once
+        messages.forEach { addMessageComponent(it) }
 
-        val scrollPane = JBScrollPane(messagesContainer).apply {
+        val scrollPane = JBScrollPane(listPanel).apply {
             preferredSize = Dimension(400, 300)
             verticalScrollBar.unitIncrement = 16
+            horizontalScrollBarPolicy = javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
         }
         add(scrollPane, BorderLayout.CENTER)
 
@@ -70,12 +73,39 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
         SwingUtilities.invokeLater { scrollToBottom(scrollPane) }
     }
 
-    private fun refreshMessages(scrollPane: JBScrollPane? = null) {
-        messagesContainer.removeAll()
-        messagesContainer.add(buildMessagesPanel(), BorderLayout.CENTER)
-        messagesContainer.revalidate()
-        messagesContainer.repaint()
-        if (scrollPane != null) scrollToBottom(scrollPane)
+    private fun addMessageComponent(chat: Chat) {
+        val ui = ChatMessage(chat, project)
+        messageUis.add(ui)
+
+        // Remove existing bottom glue before adding the new message
+        if (bottomGlue.parent === listPanel) {
+            listPanel.remove(bottomGlue)
+        }
+
+        val c = GridBagConstraints().apply {
+            gridx = 0
+            gridy = nextRow
+            weightx = 1.0
+            weighty = 0.0
+            fill = GridBagConstraints.HORIZONTAL
+            anchor = GridBagConstraints.FIRST_LINE_START
+            insets = Insets(4, 0, 4, 0) // vertical spacing between messages
+        }
+        listPanel.add(ui.panel, c)
+        nextRow++
+
+        // Re-add bottom glue to push content to the top and keep whitespace at the bottom
+        val glueConstraints = GridBagConstraints().apply {
+            gridx = 0
+            gridy = nextRow
+            weightx = 1.0
+            weighty = 1.0
+            fill = GridBagConstraints.BOTH
+        }
+        listPanel.add(bottomGlue, glueConstraints)
+
+        listPanel.revalidate()
+        listPanel.repaint()
     }
 
     private fun scrollToBottom(scrollPane: JBScrollPane) {
@@ -84,13 +114,17 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun appendUserMessage(text: String) {
-        messages.add(Chat(name = "User", message = text))
-        refreshMessages(findScrollPane())
+        val chat = Chat(name = "User", message = text)
+        messages.add(chat)
+        addMessageComponent(chat)
+        findScrollPane()?.let { scrollToBottom(it) }
     }
 
     private fun appendAiMessage(text: String) {
-        messages.add(Chat(name = "AI", message = text))
-        refreshMessages(findScrollPane())
+        val chat = Chat(name = "AI", message = text)
+        messages.add(chat)
+        addMessageComponent(chat)
+        findScrollPane()?.let { scrollToBottom(it) }
     }
 
     private fun findScrollPane(): JBScrollPane? =
@@ -98,23 +132,23 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
 
     private fun appendAiPlaceholder(): Int {
         val index = messages.size
-        messages.add(Chat(name = "AI", message = ""))
-        refreshMessages(findScrollPane())
+        val chat = Chat(name = "AI", message = "")
+        messages.add(chat)
+        addMessageComponent(chat)
         return index
     }
 
     private fun appendToAiMessage(index: Int, delta: String) {
-        if (index in messages.indices) {
+        if (index in messages.indices && index in messageUis.indices) {
             val current = messages[index]
-            if (current.name == "AI") {
-                messages[index] = Chat(name = current.name, message = current.message + delta)
-            } else {
-                messages.add(Chat(name = "AI", message = delta))
-            }
+            val updated = current.copy(message = current.message + delta)
+            messages[index] = updated
+            // Update only the affected UI component
+            messageUis[index].setMessage(updated.message)
         } else {
-            messages.add(Chat(name = "AI", message = delta))
+            // Fallback: append as a new AI message
+            appendAiMessage(delta)
         }
-        refreshMessages(findScrollPane())
     }
 
     private fun requestAiResponse(userText: String) {
