@@ -1,6 +1,8 @@
 package com.github.kavos113.zatsuagent.ui
 
+import com.github.kavos113.zatsuagent.services.AiService
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.AlignX
@@ -14,6 +16,7 @@ import javax.swing.SwingUtilities
 
 class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     private val messages: MutableList<Chat> = SAMPLE_MESSAGES
+    private val aiService = project.service<AiService>()
 
     private fun buildMessagesPanel(): JPanel = panel {
         for (chat in messages) {
@@ -93,22 +96,53 @@ class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     private fun findScrollPane(): JBScrollPane? =
         (components.firstOrNull { it is JBScrollPane } as? JBScrollPane)
 
-    private fun requestAiResponse(userText: String) {
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val response = generateAiResponse(userText)
-            SwingUtilities.invokeLater {
-                appendAiMessage(response)
-            }
-        }
+    private fun appendAiPlaceholder(): Int {
+        val index = messages.size
+        messages.add(Chat(name = "AI", message = ""))
+        refreshMessages(findScrollPane())
+        return index
     }
 
-    private fun generateAiResponse(userText: String): String {
-        // Stubbed LLM reply. Replace with real LLM API integration if needed.
-        return buildString {
-            append("You said: \"")
-            append(userText)
-            append("\"\n\n")
-            append("(This is a stubbed AI response. Integrate with an LLM API to get real answers.)")
+    private fun appendToAiMessage(index: Int, delta: String) {
+        if (index in messages.indices) {
+            val current = messages[index]
+            if (current.name == "AI") {
+                messages[index] = Chat(name = current.name, message = current.message + delta)
+            } else {
+                messages.add(Chat(name = "AI", message = delta))
+            }
+        } else {
+            messages.add(Chat(name = "AI", message = delta))
+        }
+        refreshMessages(findScrollPane())
+    }
+
+    private fun requestAiResponse(userText: String) {
+        // Add a placeholder AI message to stream into
+        val aiIndex = appendAiPlaceholder()
+        val scrollPane = findScrollPane()
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                aiService.sendRequest(
+                    prompt = userText,
+                    onRecieveMessage = { delta ->
+                        SwingUtilities.invokeLater {
+                            appendToAiMessage(aiIndex, delta)
+                            scrollPane?.let { scrollToBottom(it) }
+                        }
+                    },
+                    onRecieveReasoning = { _ ->
+                        // For minimal change, ignore reasoning stream for now.
+                        // Could be surfaced in a separate message or tooltip later.
+                    }
+                )
+            } catch (t: Throwable) {
+                val err = t.message ?: "Unknown error"
+                SwingUtilities.invokeLater {
+                    appendToAiMessage(aiIndex, "\n\n[Error] $err")
+                }
+            }
         }
     }
 }
