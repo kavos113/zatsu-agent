@@ -1,6 +1,7 @@
 package com.github.kavos113.zatsuagent.ui
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
@@ -11,13 +12,13 @@ import javax.swing.JPanel
 import javax.swing.JTextArea
 import javax.swing.SwingUtilities
 
-class ChatPanel : JPanel(BorderLayout()) {
+class ChatPanel(val project: Project) : JPanel(BorderLayout()) {
     private val messages: MutableList<Chat> = SAMPLE_MESSAGES
 
     private fun buildMessagesPanel(): JPanel = panel {
         for (chat in messages) {
             row {
-                cell(ChatMessage(chat).panel)
+                cell(ChatMessage(chat, project).panel)
                     .align(AlignX.FILL)
                     .resizableColumn()
             }

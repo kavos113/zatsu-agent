@@ -15,16 +15,16 @@ class ChatWindowFactory : ToolWindowFactory {
     }
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val chatWindow = ChatWindow()
+        val chatWindow = ChatWindow(project)
         val content = ContentFactory.getInstance().createContent(chatWindow.getContent(), null, false)
         toolWindow.contentManager.addContent(content)
     }
 
     override fun shouldBeAvailable(project: Project) = true
 
-    class ChatWindow {
+    class ChatWindow(val project: Project) {
         fun getContent() = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            add(ChatPanel(), BorderLayout.CENTER)
+            add(ChatPanel(project), BorderLayout.CENTER)
         }
     }
 }
